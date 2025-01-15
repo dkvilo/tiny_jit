@@ -2,12 +2,12 @@
 // $file tiny_jit.h
 // $author David Kviloria <david@skystargames.com>
 // @version 0.4
-// 
+//
 // This is a single header implementation approach so you need to do following:
-// 
+//
 //    #define TINY_JIT_IMPLEMENTATION
 //    #include "tiny_jit.h"
-// 
+//
 #ifndef __TINY_JIT_H
 #define __TINY_JIT_H
 
@@ -64,7 +64,7 @@ typedef enum {
 
 typedef struct
 {
-  // code 
+  // code
   uint32_t* code;
   size_t code_size;
   size_t capacity;
@@ -172,6 +172,9 @@ arm64_add_imm(int rd, int rn, uint16_t imm12);
 
 JITCompiler*
 jit_init();
+
+void
+jit_dump_code(JITCompiler* jit);
 
 size_t
 jit_add_string(JITCompiler* jit, const char* str);
@@ -858,6 +861,46 @@ jit_execute_typed(JITCompiler* jit, JitReturnType return_type)
 #endif
 
   return result;
+}
+
+void
+jit_dump_code(JITCompiler* jit)
+{
+  if (!jit || !jit->code || jit->code_size == 0) {
+    fprintf(stderr,
+            "JIT dump failed: Invalid JIT compiler or empty code section.\n");
+    return;
+  }
+  printf("\n\n\t\tTinyJIT Dump\n\n");
+  printf("INSTRUCTIONS: %zu/%zu bytes\n", jit->code_size, jit->capacity);
+  printf("---------------------------------------------------------\n");
+  uint8_t* code = (uint8_t*)jit->code;
+  for (size_t i = 0; i < jit->code_size; i++) {
+    if (i % 16 == 0) {
+      if (i > 0)
+        printf("\n");
+      printf("%08zx: ", i);
+    }
+    printf("%02x ", code[i]);
+  }
+  printf("\n");
+
+  if (jit->data && jit->data_size > 0) {
+    printf("\nSTATIC MEMORY: %zu/%zu bytes\n", jit->data_size, jit->data_capacity);
+    printf("---------------------------------------------------------\n");
+    uint8_t* data = (uint8_t*)jit->data;
+    for (size_t i = 0; i < jit->data_size; i++) {
+      if (i % 16 == 0) {
+        if (i > 0)
+          printf("\n");
+        printf("%08zx: ", i);
+      }
+      printf("%02x ", data[i]);
+    }
+    printf("\n");
+  } else {
+    printf("\nNo data section found.\n");
+  }
 }
 
 int
