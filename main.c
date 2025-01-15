@@ -6,14 +6,21 @@
 #include "tiny_jit.h"
 
 void
-print_number(int n)
+print_fmt_int(const char *fmt, int val)
 {
-  printf("Number: %d\n", n);
+  printf(fmt, val);
 }
+
 void
-print_string(const char* str)
+print_fmt_string(const char *fmt, const char *val)
 {
-  printf("%s\n", str);
+  printf(fmt, val);
+}
+
+void
+print_string(const char *str)
+{
+  printf("%s", str);
 }
 
 void
@@ -26,14 +33,14 @@ string_example()
   }
 
   size_t str_offset = jit_add_string(
-    jit, "Hello, There! This string is stored in the 'data' section.");
+    jit, "Hello, There! This string is stored in the 'data' section.\n");
   if (str_offset == (size_t)-1) {
     fprintf(stderr, "Failed to add string\n");
     jit_cleanup(jit);
     return;
   }
 
-  size_t str2_offset = jit_add_string(jit, "This string is also stored there.");
+  size_t str2_offset = jit_add_string(jit, "This string is also stored there.\n");
   if (str2_offset == (size_t)-1) {
     fprintf(stderr, "Failed to add string2\n");
     jit_cleanup(jit);
@@ -52,6 +59,7 @@ string_example()
   jit_emit(jit, arm64_ret());
 
   jit_execute_int(jit);
+  jit_dump_code(jit);
 
   jit_cleanup(jit);
 }
@@ -98,6 +106,7 @@ dynamic_lib_example()
 
   int result = jit_execute_int(jit);
   printf("Result: (add + multiply): %d\n", result);
+  jit_dump_code(jit);
 
   ext_lib_cleanup(lib);
   jit_cleanup(jit);
@@ -124,6 +133,7 @@ ldr_example()
 
   float result = jit_execute_float(jit);
   printf("Loaded value: %.3f\n", result);
+  jit_dump_code(jit);
 
   jit_cleanup(jit);
 }
@@ -146,6 +156,48 @@ float_example()
 
   float result = jit_execute_float(jit);
   printf("%.3f + %.3f = %.3f\n", a, b, result);
+  jit_dump_code(jit);
+
+  jit_cleanup(jit);
+}
+
+void counter_example() {
+  JITCompiler *jit = jit_init();
+  if (!jit) {
+    fprintf(stderr, "Failed to initialize JIT compiler\n");
+    return;
+  }
+
+  size_t loop_start = jit_create_label(jit);
+  size_t loop_end = jit_create_label(jit);
+  size_t format_str_offset = jit_add_string(jit, "Count: %d\n");
+  size_t header_str_offset = jit_add_string(jit, "Counting from 0 to %d:\n");
+
+  jit_load_int(jit, rx19, 0); // counter
+  jit_load_int(jit, rx20, 5); // limit 5
+
+  jit_load_string_addr(jit, rx0, header_str_offset);
+  jit_emit(jit, arm64_add(rx1, rx20, rx31)); // x1 = x20 + xzr
+  jit_call(jit, print_fmt_int);
+
+jit_bind_label(jit, loop_start);
+  jit_load_string_addr(jit, rx0, format_str_offset);
+  jit_emit(jit, arm64_add(rx1, rx19, rx31)); // x1 = x19
+  jit_call(jit, print_fmt_int);
+
+  jit_compare(jit, rx19, rx20);
+  jit_jump_if_equal(jit, loop_end);
+
+  jit_load_int(jit, rx0, 1);
+  jit_emit(jit, arm64_add(rx19, rx19, rx0));
+
+  jit_jump(jit, loop_start);
+
+jit_bind_label(jit, loop_end);
+  jit_emit(jit, arm64_ret());
+
+  jit_dump_code(jit);
+  jit_execute_int(jit);
 
   jit_cleanup(jit);
 }
@@ -156,6 +208,7 @@ main()
   string_example();
   float_example();
   ldr_example();
+  counter_example();
   dynamic_lib_example();
   return 0;
 }
